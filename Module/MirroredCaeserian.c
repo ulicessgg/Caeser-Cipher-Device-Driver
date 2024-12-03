@@ -35,7 +35,7 @@ MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
 // data structure used for storing info essesntial to
-typdef struct myCipher
+struct myCipher
 {
     int numChars;
     int* key;   // array used for shifting characters can be uniformly set or randomized
@@ -51,13 +51,29 @@ static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, lo
     // the users original string
 
     // possible implementation -- still may need adjustment
-    // c->numChars = strlen(buf);   // set number of characters
-    // c->plainText = malloc(c->numChars);  // allocate the memory before any process
-    // memcpy(c->plainText, buf, c->numChars)   // save text before terminating successfully
+    c->numChars = strlen(buf);   // set number of characters
+    c->plainText = vmalloc(c->numChars);  // allocate the memory before any process
+    memcpy(c->plainText, buf, c->numChars);   // save text before terminating successfully
 
-    // printk(KERN_INFO "We wrote: %lu characters", hsize);
+    printk(KERN_INFO "We wrote: %lu characters", hsize);
 
     return hsize;
+}
+
+static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* off) // need to edit accordingly
+{
+    struct myCipher* c = (struct myCipher*) fs->private_data;
+    
+    // TODO: need to store the amount of characters input by the user along with storing
+    // the users original string
+    // possible implementation -- still may need adjustment
+    c->numChars = strlen(buf);   // set number of characters
+    c->plainText = vmalloc(c->numChars);  // allocate the memory before any process
+    memcpy(c->plainText, buf, c->numChars);   // save text before terminating successfully
+
+    printk(KERN_INFO "We read: %lu characters", hsize);
+
+    return 0;
 }
 
 static int myOpen(struct inode* inode, struct file* fs)
@@ -71,10 +87,9 @@ static int myOpen(struct inode* inode, struct file* fs)
     }
 
     //TODO: need to set values according to myCipher and after figuring out fs
-
     // possible implementation -- still may need adjustment
-    // c->numChars = 0;
-    // fs->private_data = c;
+    c->numChars = 0;
+    fs->private_data = c;
 
     return 0;
 }
@@ -94,7 +109,7 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
     if(command != 3)
     {
         printk(KERN_ERR "Failed in myIoCtl.\n"); // virtual form of printf i believe must confirm
-        return -1
+        return -1;
     }
 
     count = (int*) data;
@@ -110,6 +125,7 @@ struct file_operations fops =
     .open = myOpen,
     .release = myClose,
     .write = myWrite,
+    .read = myRead,
     .unlocked_ioctl = myIoCtl,
     .owner = THIS_MODULE,
 };
@@ -118,7 +134,7 @@ struct file_operations fops =
 int init_module(void)
 {
     int result, registers;
-    dev_t devno = MKDEV/(MY_MAJOR, MY_MINOR);
+    dev_t devno = MKDEV(MY_MAJOR, MY_MINOR);
 
     registers = register_chrdev_region(devno, 1, DEVICE_NAME);
     printk(KERN_INFO "Register chardev succeeded 1: %d\n", registers);
@@ -140,9 +156,8 @@ int init_module(void)
 // unregistering and removing device from kernel -- not sure if i need to edit this
 void cleanup_module(void)
 {
-    dev_t devno = MKDEV/(MY_MAJOR, MY_MINOR);
-    unregister_chrdev_region(devno,1);
+    dev_t devno = MKDEV(MY_MAJOR, MY_MINOR);
+    unregister_chrdev_region(devno, 1);
     cdev_del(&my_cdev);
-
     printk(KERN_INFO "Goodbyte from the Mirrored Caeserian Driver!\n");
 }
