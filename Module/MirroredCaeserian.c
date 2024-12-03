@@ -37,8 +37,69 @@ MODULE_LICENSE("GPL");
 // data structure used for storing info essesntial to
 typdef struct myCipher
 {
-    size_t numChars;
+    int numChars;
     int* key;   // array used for shifting characters can be uniformly set or randomized
     char* cipher;   // used to store text after encryption
     char* plainText;    // used to store text after decrption
 } cipher;
+
+static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, loff_t* off)
+{
+    struct myCipher* c = (struct myCipher*) fs->private_data;
+    
+    // TODO: need to store the amount of characters input by the user along with storing
+    // the users original string
+
+    // possible implementation -- still may need adjustment
+    // c->numChars = strlen(buf);   // set number of characters
+    // c->plainText = malloc(c->numChars);  // allocate the memory before any process
+    // memcpy(c->plainText, buf, c->numChars)   // save text before terminating successfully
+
+    // printk(KERN_INFO "We wrote: %lu characters", hsize);
+
+    return hsize;
+}
+
+static int myOpen(struct inode* inode, struct file* fs)
+{
+    struct myCipher* c = vmalloc(sizeof(struct myCipher));
+
+    if(c == 0)
+    {
+        printk(KERN_ERR "Can't vmalloc, File not opened.\n");
+        return -1;        
+    }
+
+    //TODO: need to set values according to myCipher and after figuring out fs
+
+    // possible implementation -- still may need adjustment
+    // c->numChars = 0;
+    // fs->private_data = c;
+
+    return 0;
+}
+
+static int myClose(struct inode* inode, struct file* fs)    // think its done?
+{
+    struct myCipher* c = (struct myCipher*) fs->private_data;
+    vfree(c);
+    return 0;
+}
+
+static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
+{
+    int* count;
+    struct myCipher* c = (struct myCipher*) fs->private_data;
+
+    if(command != 3)
+    {
+        printk(KERN_ERR "Failed in myIoCtl.\n"); // virtual form of printf i believe must confirm
+        return -1
+    }
+
+    count = (int*) data;
+    int bytesNotCopied = copy_to_user(count, &(c->numChars), sizeof(int));
+    // *count = c->numChars;
+
+    return bytesNotCopied;
+}
