@@ -103,3 +103,36 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
 
     return bytesNotCopied;
 }
+
+// data struct for using driver -- may need to be edited as cipher is fully implemented
+struct file_operations fops = 
+{
+    .open = myOpen,
+    .release = myClose,
+    .write = myWrite,
+    .unlocked_ioctl = myIoCtl,
+    .owner = THIS_MODULE,
+};
+
+// creates device node in /dev, returns error if not made -- need to edit accordingly!
+int init_module(void)
+{
+    int result, registers;
+    dev_t devno = MKDEV/(MY_MAJOR, MY_MINOR);
+
+    registers = register_chrdev_region(devno, 1, DEVICE_NAME);
+    printk(KERN_INFO "Register chardev succeeded 1: %d\n", registers);
+    cdev_init(&my_cdev, &fops);
+    my_cdev.owner = THIS_MODULE;
+
+    result = cdev_add(&my_cdev, devno, 1);
+    printk(KERN_INFO "Dev Add chardev succeeed 2: %d\n", result);
+    printk(KERN_INFO "Welcome - Mirrored Caeserian Driver is loaded.\n");
+
+    if(result < 0)
+    {
+        printk(KERN_INFO "Register chardev failed: %d\n", result);
+    }
+
+    return result;
+}
