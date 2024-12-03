@@ -136,3 +136,13 @@ int init_module(void)
 
     return result;
 }
+
+// unregistering and removing device from kernel -- not sure if i need to edit this
+void cleanup_module(void)
+{
+    dev_t devno = MKDEV/(MY_MAJOR, MY_MINOR);
+    unregister_chrdev_region(devno,1);
+    cdev_del(&my_cdev);
+
+    printk(KERN_INFO "Goodbyte from the Mirrored Caeserian Driver!\n");
+}
