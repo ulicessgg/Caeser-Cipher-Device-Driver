@@ -89,16 +89,12 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
     // TODO: This is where i will prompt encrypt and decrypt using an interface
     // should use switch statement and add some way to prompt users to set values
 
-    // will include this in switch cases so parameters can be changed as needed
-
-/* 
     if(copy_to_user(buf, c->buffer, c->numChars))  // save text before terminating successfully
     {
         printk(KERN_ERR "Failed to read.\n");  // Report error and exit forcefully if copy failed
         return -1;
     }
-*/
-    
+
     return hsize;
 }
 
