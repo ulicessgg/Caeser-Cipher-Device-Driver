@@ -24,9 +24,6 @@
 #define MY_MINOR       0
 #define DEVICE_NAME    "MirroredCaeserian"
 
-#define SETCAESER      0
-#define SETPAD         1
-
 int major, minor;
 char* kernel_buffer;
 
@@ -36,6 +33,8 @@ int actual_rx_size = 0;
 MODULE_AUTHOR("Ulices Gonzalez");
 MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
+
+int mode;   // used to select between encryption or decryption
 
 // data structure used for storing info essesntial to
 struct myCipher
@@ -158,15 +157,24 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
     {
         // call function to generate random keys and save it to c->pad
     }
-
-    // change this to change the processes undergone throughout the module
-    if(command != 3)
+    else
     {
-        printk(KERN_ERR "Failed in myIoCtl.\n"); // virtual form of printf i believe must confirm
-        return -1;
+        // call function to set the key to each value in c->pad
     }
 
-    int bytesNotCopied = copy_to_user(count, &(c->numChars), sizeof(int));
+    // selects process based on command entered by user
+    switch(command)
+    {
+        case 0: // encrypts user text
+            // sets mode for encryption
+            break;
+        case 1: // decrypts user text
+            // sets mode for decryption
+            break;
+        default:    // forcefully returns if command is invalid
+            printk(KERN_ERR "Failed in myIoCtl.\n");
+            return -1;
+    }
 
     return 0;
 }
