@@ -22,10 +22,10 @@
 
 #define MY_MAJOR       415
 #define MY_MINOR       0
-#define DEVICE_NAME   "MirroredCaeserian"
+#define DEVICE_NAME    "MirroredCaeserian"
 
-#define SETUNIKEYS     0
-#define GENRANDKEYS    1
+#define SETCAESER      0
+#define SETPAD         1
 
 int major, minor;
 char* kernel_buffer;
@@ -61,8 +61,8 @@ static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, lo
     }
 
     // allocates memory to store keys for each character
-    c->key = vmalloc(c->numChars);
-    if(c->key == NULL)
+    c->pad = vmalloc(c->numChars);
+    if(c->pad == NULL)
     {
         printk(KERN_ERR "Can't vmalloc keys.\n");
         return -1;        
@@ -75,6 +75,8 @@ static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, lo
         return -1;
     }
 
+    c->buffer[c->numChars] = '\0';  // sets the null terminator for future use
+
     printk(KERN_INFO "We wrote: %lu characters", hsize);
 
     return hsize;
@@ -82,6 +84,9 @@ static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, lo
 
 static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* off)
 {
+    struct myCipher* c = (struct myCipher*) fs->private_data;
+
+    
     // TODO: This is where i will prompt encrypt and decrypt using an interface
     // should use switch statement and add some way to prompt users to set values
 
@@ -124,13 +129,13 @@ static int myClose(struct inode* inode, struct file* fs)
 
     // free allocated memory
     vfree(c->buffer);
-    vfree(c->key);
+    vfree(c->pad);
     vfree(c);
 
     // clear values after freeing allocated memory
     c->numChars = 0;
     c->buffer = NULL;
-    c->key = NULL;
+    c->pad = NULL;
     c = NULL;
 
     return 0;
@@ -138,20 +143,32 @@ static int myClose(struct inode* inode, struct file* fs)
 
 static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
 {
-    int* count;
     struct myCipher* c = (struct myCipher*) fs->private_data;
+    int temp;   // used to store key before setting pad
 
+    // save text before terminating successfully
+    if(copy_from_user(temp, data, sizeof(int))) // Report error and exit forcefully if copy failed
+    {
+        printk(KERN_ERR "Failed to set key.\n");
+        return -1;
+    }
+
+    // if the user entered an invalid key generate random keys for each string (one time pad)
+    if(temp <= 0)
+    {
+        // call function to generate random keys and save it to c->pad
+    }
+
+    // change this to change the processes undergone throughout the module
     if(command != 3)
     {
         printk(KERN_ERR "Failed in myIoCtl.\n"); // virtual form of printf i believe must confirm
         return -1;
     }
 
-    count = (int*) data;
     int bytesNotCopied = copy_to_user(count, &(c->numChars), sizeof(int));
-    // *count = c->numChars;
 
-    return bytesNotCopied;
+    return 0;
 }
 
 // data struct for using driver -- may need to be edited as cipher is fully implemented
@@ -165,7 +182,7 @@ struct file_operations fops =
     .owner = THIS_MODULE,
 };
 
-// creates device node in /dev, returns error if not made -- need to edit accordingly!
+// creates device node in /dev, returns error if not made
 int init_module(void)
 {
     int result, registers;
@@ -188,7 +205,7 @@ int init_module(void)
     return result;
 }
 
-// unregistering and removing device from kernel -- not sure if i need to edit this
+// unregistering and removing device from kernel
 void cleanup_module(void)
 {
     dev_t devno = MKDEV(MY_MAJOR, MY_MINOR);
