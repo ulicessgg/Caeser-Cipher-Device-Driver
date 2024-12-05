@@ -25,7 +25,7 @@
 
 #define MY_MAJOR       415
 #define MY_MINOR       0
-#define DEVICE_NAME    "MirroredCaeserian"
+#define DEVICE_NAME    "ReversedAlternatingCaeserian"
 
 int major, minor;
 char* kernel_buffer;
@@ -38,6 +38,10 @@ MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
 int* setPad(int, int);
+char* mirror(char*, int);
+char* encrypt(char*, int);
+char* encrypt(char*, int);
+
 
 int mode;   // used to select between encryption or decryption
 
