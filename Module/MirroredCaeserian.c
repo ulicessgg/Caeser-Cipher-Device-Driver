@@ -20,6 +20,9 @@
 
 #include <linux/sched.h>
 
+// used for random key generation
+#include <linux/random.h>
+
 #define MY_MAJOR       415
 #define MY_MINOR       0
 #define DEVICE_NAME    "MirroredCaeserian"
@@ -34,6 +37,8 @@ MODULE_AUTHOR("Ulices Gonzalez");
 MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
+int* setPad(int, int);
+
 int mode;   // used to select between encryption or decryption
 
 // data structure used for storing info essesntial to
@@ -41,8 +46,9 @@ struct myCipher
 {
     int numChars;   // stores the total amount of characters input by the user
     char* buffer;   // stores text will be overwritten if already written upon encryption or decryption
-    int* key;   // array used for shifting characters can be uniformly set or randomized
-} cipher;
+    int* pad;   // array used for shifting characters, is randomized can only encrypt
+    int* key;    // used for shifting characters for both encryption and decryption
+} myCipher;
 
 // writes text from user and allocates memory to support n amount of characters
 static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, loff_t* off)
@@ -139,38 +145,32 @@ static int myClose(struct inode* inode, struct file* fs)
 static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
-    int temp;   // used to store key before setting pad
 
     // save text before terminating successfully
-    if(copy_from_user(temp, data, sizeof(int))) // Report error and exit forcefully if copy failed
+    if(copy_from_user(c->key, (int __user*) data, sizeof(int))) // Report error and exit forcefully if copy failed
     {
-        printk(KERN_ERR "Failed to set key.\n");
+        printk(KERN_ERR "Failed to copy key.\n");
         return -1;
-    }
-
-    // if the user entered an invalid key generate random keys for each string (one time pad)
-    if(temp <= 0)
-    {
-        // call function to generate random keys and save it to c->pad
-    }
-    else
-    {
-        // call function to set the key to each value in c->pad
     }
 
     // selects process based on command entered by user
     switch(command)
     {
-        case 0: // encrypts user text
-            // sets mode for encryption
+        case 0: // sets mode for encrypting user text
+            mode = 0;
             break;
-        case 1: // decrypts user text
-            // sets mode for decryption
+        case 1: // sets mode for decrypting user text
+            mode = 1;
+            break;
+        case 2: // sets mode for encrypting with one time pad, decryption impossible if attempted
+            mode = 2;
             break;
         default:    // forcefully returns if command is invalid
             printk(KERN_ERR "Failed in myIoCtl.\n");
             return -1;
     }
+
+    fs->private_data = c;
 
     return 0;
 }
@@ -216,4 +216,22 @@ void cleanup_module(void)
     unregister_chrdev_region(devno, 1);
     cdev_del(&my_cdev);
     printk(KERN_INFO "Goodbyte from the Mirrored Caeserian Driver!\n");
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+// sets key pad using user inputted key for encryption and decryption
+int* setPad(int key, int numChars)
+{
+    int* tempPad = vmalloc(numChars);
+
+    for(int i = 0; i < numChars; i++)
+    {
+        int temp;
+        get_random_bytes(&temp, numChars); // need to test before use
+
+        tempPad[i] = temp % numChars;
+    }
+
+    return tempPad;
 }
