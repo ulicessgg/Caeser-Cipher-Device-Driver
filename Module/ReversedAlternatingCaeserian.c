@@ -91,9 +91,22 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
-    
-    // TODO: This is where i will prompt encrypt and decrypt using an interface
-    // should use switch statement and add some way to prompt users to set values
+    // executes user processes based off mode set in ioctl
+    switch(mode)
+    {
+        case 0: // encrypts the users string with their key
+            encrypt(&(c->buffer), c->numChars, *(c->key));
+            break;
+        case 1: // decrypts the users string with their key
+            decrypt(&(c->buffer), c->numChars, *(c->key));
+            break;
+        case 2: // generates one time pad and encrypts users string
+            otpEncrypt(&(c->buffer), c->numChars);
+            break;
+        default:
+            printk(KERN_ERR "Failed in myRead.\n");
+            return -1;
+    }
 
     if(copy_to_user(buf, c->buffer, c->numChars))  // save text before terminating successfully
     {
@@ -101,7 +114,7 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
         return -1;
     }
 
-    return hsize;
+    return c->numChars;
 }
 
 // initalizes cipher instance for reading and or writing
