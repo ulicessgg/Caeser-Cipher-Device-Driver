@@ -5,7 +5,7 @@
 * GitHub-Name:: ulicessgg
 * Project:: Assignment 6 – Device Driver
 *
-* File:: <MirroredCaeserian.c>
+* File:: <ReversedAlternatingCaeserian.c>
 *
 * Description:: Device Driver that mirrors a string and uses
 * a Caeserian Cipher to Encrypt/Decrypt the string
@@ -38,9 +38,9 @@ MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
 int* setPad(int, int);
-char* mirror(char*, int);
-char* encrypt(char*, int);
-char* encrypt(char*, int);
+char* reverse(char*, int);
+char* encrypt(char*, int, int);
+char* encrypt(char*, int, int);
 
 
 int mode;   // used to select between encryption or decryption
@@ -238,4 +238,39 @@ int* setPad(int key, int numChars)
     }
 
     return tempPad;
+}
+
+char* reverse(char* buffer, int numChars)
+{
+    char* tempBuffer = vmalloc(numChars);
+    if(tempBuffer == NULL)
+    {
+        printk(KERN_ERR "Can't vmalloc the temporary buffer in Reverse.\n");
+        return -1;        
+    }
+    
+    for(int i = 0; i < numChars; i++)
+    {
+        for(int j = numChars - 1; j >= 0; j--)
+        {
+            tempBuffer[i] = buffer[j];
+        }
+    }
+
+    tempBuffer[numChars] = '\0';
+    buffer = tempBuffer;
+
+    vfree(tempBuffer);
+
+    return buffer;
+}
+
+char* encrypt(char* buffer, int numChars, int key)
+{
+    
+}
+
+char* encrypt(char* buffer, int numChars, int key)
+{
+
 }
