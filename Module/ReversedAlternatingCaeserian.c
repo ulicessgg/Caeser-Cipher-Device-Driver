@@ -149,6 +149,7 @@ static int myClose(struct inode* inode, struct file* fs)
 
     // free allocated memory
     vfree(c->buffer);
+    vfree(c->key);
     vfree(c);
 
     // clear values after freeing allocated memory
@@ -165,7 +166,7 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
     // save text before terminating successfully
-    if(copy_from_user(c->key, (int __user*) data, sizeof(int)))
+    if(copy_from_user(c->key, (int __user*) data, sizeof(c->key)))
     {
         // Report error and exit forcefully if copy failed
         printk(KERN_ERR "Failed to copy key.\n");
@@ -189,7 +190,7 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
             return -1;
     }
 
-    fs->private_data = c;
+    fs-> private_data = c;
 
     return 0;
 }
@@ -281,11 +282,11 @@ int encrypt(char** buffer, int numChars, int key)
     {
         if(i % 2 == 0)  // if even shifts up
         {
-            buffer[i] = buffer[i] + key;
+            *(buffer)[i] = *(buffer)[i] + key;
         }
         else    // if odd shifts down
         {
-            buffer[i] = buffer[i] - key;
+            *(buffer)[i] = *(buffer)[i] - key;
         }
     }
 
@@ -301,11 +302,11 @@ int decrypt(char** buffer, int numChars, int key)
     {
         if(i % 2 == 0)  // if even shifts down
         {
-            buffer[i] = buffer[i] - key;
+            *(buffer)[i] = *(buffer)[i] - key;
         }
         else    // if odd shifts up
         {
-            buffer[i] = buffer[i] + key;
+            *(buffer)[i] = *(buffer)[i] + key;
         }
     }
 
@@ -329,6 +330,8 @@ int setPad(int** pad, int numChars)
         tempPad[i] = temp % numChars; // reduces the random key and saves it to the pad
     }
 
+    *pad = tempPad;
+
     // signifies successful encryption
     return 0;
 }
@@ -345,11 +348,11 @@ int otpEncrypt(char** buffer, int numChars)
     {
         if(i % 2 == 0)  // if even shifts up
         {
-            buffer[i] = buffer[i] + pad[i];
+            *(buffer)[i] = *(buffer)[i] + pad[i];
         }
         else    // if odd shifts down
         {
-            buffer[i] = buffer[i] - pad[i];
+            *(buffer)[i] = *(buffer)[i] - pad[i];
         }
     }
 

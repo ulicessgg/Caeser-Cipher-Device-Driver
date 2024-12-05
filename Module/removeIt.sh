@@ -1,2 +1,2 @@
-sudo rm /dev/MirroredCaeserian
-sudo rmmod MirroredCaeserian.ko
+sudo rm /dev/ReversedAlternatingCaeserian
+sudo rmmod ReversedAlternatingCaeserian.ko
