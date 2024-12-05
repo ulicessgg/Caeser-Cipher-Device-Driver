@@ -37,22 +37,26 @@ MODULE_AUTHOR("Ulices Gonzalez");
 MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
-int* setPad(int, int);
-char* reverse(char*, int);
-char* encrypt(char*, int, int);
-char* encrypt(char*, int, int);
+// function used to reverse strings for ALL options
+int reverse(char**, int);
 
+// general encryption and decryption functions used for driver 
+int encrypt(char**, int, int);
+int decrypt(char**, int, int);
 
-int mode;   // used to select between encryption or decryption
+// functions used when one time pad is selected
+int setPad(int**, int);
+int otpEncrypt(char**, int);
 
 // data structure used for storing info essesntial to
 struct myCipher
 {
     int numChars;   // stores the total amount of characters input by the user
-    char* buffer;   // stores text will be overwritten if already written upon encryption or decryption
-    int* pad;   // array used for shifting characters, is randomized can only encrypt
+    char* buffer;   // stores text for encryption and decryption will be overwritten
     int* key;    // used for shifting characters for both encryption and decryption
 } myCipher;
+
+int mode;   // used to select between encryption or decryption
 
 // writes text from user and allocates memory to support n amount of characters
 static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, loff_t* off)
@@ -66,14 +70,6 @@ static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, lo
     if(c->buffer == NULL)
     {
         printk(KERN_ERR "Can't vmalloc the buffer.\n");
-        return -1;        
-    }
-
-    // allocates memory to store keys for each character
-    c->pad = vmalloc(c->numChars);
-    if(c->pad == NULL)
-    {
-        printk(KERN_ERR "Can't vmalloc keys.\n");
         return -1;        
     }
 
@@ -119,8 +115,14 @@ static int myOpen(struct inode* inode, struct file* fs)
         return -1;        
     }
 
-    // sets the size of current buffer(s) to be empty
+    // sets the size of current buffer to 0 and allocates memory for key
     c->numChars = 0;
+    c->key = vmalloc(sizeof(int));
+    if(c->key == NULL)
+    {
+        printk(KERN_ERR "Can't vmalloc key.\n");
+        return -1;        
+    }
 
     // saves our struct instance for future use
     fs->private_data = c;
@@ -134,13 +136,12 @@ static int myClose(struct inode* inode, struct file* fs)
 
     // free allocated memory
     vfree(c->buffer);
-    vfree(c->pad);
     vfree(c);
 
     // clear values after freeing allocated memory
     c->numChars = 0;
     c->buffer = NULL;
-    c->pad = NULL;
+    c->key = NULL;
     c = NULL;
 
     return 0;
@@ -151,8 +152,9 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
     // save text before terminating successfully
-    if(copy_from_user(c->key, (int __user*) data, sizeof(int))) // Report error and exit forcefully if copy failed
+    if(copy_from_user(c->key, (int __user*) data, sizeof(int)))
     {
+        // Report error and exit forcefully if copy failed
         printk(KERN_ERR "Failed to copy key.\n");
         return -1;
     }
@@ -224,53 +226,120 @@ void cleanup_module(void)
 
 //////////////////////////////////////////////////////////////////////////////
 
-// sets key pad using user inputted key for encryption and decryption
-int* setPad(int key, int numChars)
+// im a fan of da vinci and he was known for mirror writing in reverse
+// so in an effort to add some complexity i will be doing the same here
+// reversed text will be returned through reference
+int reverse(char** buffer, int numChars)
 {
-    int* tempPad = vmalloc(numChars);
-
-    for(int i = 0; i < numChars; i++)
-    {
-        int temp;
-        get_random_bytes(&temp, numChars); // need to test before use
-
-        tempPad[i] = temp % numChars;
-    }
-
-    return tempPad;
-}
-
-char* reverse(char* buffer, int numChars)
-{
+    // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
     char* tempBuffer = vmalloc(numChars);
-    if(tempBuffer == NULL)
+    if(tempBuffer == NULL) 
     {
+        // Report error and exit forcefully if copy failed
         printk(KERN_ERR "Can't vmalloc the temporary buffer in Reverse.\n");
         return -1;        
     }
     
+    // saves characters into our temp buffer as we iterate backwards through
+    // the source buffer
     for(int i = 0; i < numChars; i++)
     {
         for(int j = numChars - 1; j >= 0; j--)
         {
-            tempBuffer[i] = buffer[j];
+            tempBuffer[i] = *buffer[j];
         }
     }
 
+    // sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
-    buffer = tempBuffer;
+    *buffer = tempBuffer;
 
+    // free the allocated memory before terminating
     vfree(tempBuffer);
 
-    return buffer;
+    return 0;
 }
 
-char* encrypt(char* buffer, int numChars, int key)
+// encrypts supplied buffer with provided key and returns cipher by reference
+int encrypt(char** buffer, int numChars, int key)
 {
-    
+    // shifts characters using key and alternates shift each index
+    for(int i = 0; i < numChars; i++)
+    {
+        if(i % 2 == 0)  // if even shifts up
+        {
+            buffer[i] = buffer[i] + key;
+        }
+        else    // if odd shifts down
+        {
+            buffer[i] = buffer[i] - key;
+        }
+    }
+
+    // signifies successful encryption
+    return 0;
 }
 
-char* encrypt(char* buffer, int numChars, int key)
+// decrypts supplied buffer with provided key and returns plain text by reference
+int decrypt(char** buffer, int numChars, int key)
 {
+    // shifts characters using key and alternates shift each index
+    for(int i = 0; i < numChars; i++)
+    {
+        if(i % 2 == 0)  // if even shifts down
+        {
+            buffer[i] = buffer[i] - key;
+        }
+        else    // if odd shifts up
+        {
+            buffer[i] = buffer[i] + key;
+        }
+    }
 
+    // signifies successful decryption
+    return 0;
+}
+
+// sets one time pad using random keys for encryption and decryption
+// returns pad by reference
+int setPad(int** pad, int numChars)
+{
+    // create and allocate temporary pad for generation
+    int* tempPad = vmalloc(numChars);
+
+    // generates random 0 to numChars and saves to the temp pad
+    for(int i = 0; i < numChars; i++)
+    {
+        int temp;   // holds random value
+        get_random_bytes(&temp, numChars); // need to test before use but generates random keys
+
+        tempPad[i] = temp % numChars; // reduces the random key and saves it to the pad
+    }
+
+    // signifies successful encryption
+    return 0;
+}
+
+// encrypts supplied buffer with random keys and returns cipher by reference
+int otpEncrypt(char** buffer, int numChars)
+{
+    // create and set the one time pad
+    int* pad = vmalloc(numChars);
+    setPad(&pad, numChars);
+
+    // shifts characters using ne time pad and alternates shift each index
+    for(int i = 0; i < numChars; i++)
+    {
+        if(i % 2 == 0)  // if even shifts up
+        {
+            buffer[i] = buffer[i] + pad[i];
+        }
+        else    // if odd shifts down
+        {
+            buffer[i] = buffer[i] - pad[i];
+        }
+    }
+
+    // signifies successful encryption
+    return 0;
 }
