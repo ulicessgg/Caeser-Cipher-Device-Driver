@@ -38,15 +38,15 @@ MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
 // function used to reverse strings for ALL options
-int reverse(char**, int);
+char* reverse(char*, int);
 
 // general encryption and decryption functions used for driver 
-int encrypt(char**, int, int);
-int decrypt(char**, int, int);
+char* encrypt(char*, int, int);
+char* decrypt(char*, int, int);
 
 // functions used when one time pad is selected
-int setPad(int**, int);
-int otpEncrypt(char**, int);
+int* setPad(int*, int);
+char* otpEncrypt(char*, int);
 
 // data structure used for storing info essesntial to
 struct myCipher
@@ -54,9 +54,8 @@ struct myCipher
     int numChars;   // stores the total amount of characters input by the user
     char* buffer;   // stores text for encryption and decryption will be overwritten
     int* key;    // used for shifting characters for both encryption and decryption
+    int mode;   // used to select between encryption or decryption
 } myCipher;
-
-int mode;   // used to select between encryption or decryption
 
 // writes text from user and allocates memory to support n amount of characters
 static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, loff_t* off)
@@ -243,7 +242,7 @@ void cleanup_module(void)
 // im a fan of da vinci and he was known for mirror writing in reverse
 // so in an effort to add some complexity i will be doing the same here
 // reversed text will be returned through reference
-int reverse(char** buffer, int numChars)
+int reverse(char* buffer, int numChars)
 {
     // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
     char* tempBuffer = vmalloc(numChars);
@@ -260,7 +259,7 @@ int reverse(char** buffer, int numChars)
     {
         for(int j = numChars - 1; j >= 0; j--)
         {
-            tempBuffer[i] = *buffer[j];
+            tempBuffer[i] = buffer[j];
         }
     }
 
@@ -275,48 +274,60 @@ int reverse(char** buffer, int numChars)
 }
 
 // encrypts supplied buffer with provided key and returns cipher by reference
-int encrypt(char** buffer, int numChars, int key)
+char* encrypt(char* buffer, int numChars, int key)
 {
+    char* tempBuffer = vmalloc(numChars);
+
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
     {
-        if(i % 2 == 0)  // if even shifts up
+        if(i % 2 == 0)  // if even shift up
         {
-            *(buffer)[i] = *(buffer)[i] + key;
+            tempBuffer[i] = buffer[i] + key;
         }
         else    // if odd shifts down
         {
-            *(buffer)[i] = *(buffer)[i] - key;
+            tempBuffer[i] = buffer[i] - key;
         }
     }
 
+    tempBuffer[numChars] = '\0';
+    buffer = tempBuffer;
+    vfree(tempBuffer);
+
     // signifies successful encryption
-    return 0;
+    return buffer;
 }
 
 // decrypts supplied buffer with provided key and returns plain text by reference
-int decrypt(char** buffer, int numChars, int key)
+char* decrypt(char* buffer, int numChars, int key)
 {
+    char* tempBuffer = vmalloc(numChars);
+
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
     {
-        if(i % 2 == 0)  // if even shifts down
+        if(i % 2 == 0)  // if even shift down
         {
-            *(buffer)[i] = *(buffer)[i] - key;
+            tempBuffer[i] = buffer[i] - key;
         }
         else    // if odd shifts up
         {
-            *(buffer)[i] = *(buffer)[i] + key;
+            tempBuffer[i] = buffer[i] + key;
         }
     }
 
-    // signifies successful decryption
-    return 0;
+    tempBuffer[numChars] = '\0';
+    buffer = tempBuffer;
+    vfree(tempBuffer);
+
+    // signifies successful encryption
+    return buffer;
 }
 
 // sets one time pad using random keys for encryption and decryption
 // returns pad by reference
-int setPad(int** pad, int numChars)
+int* setPad(int* pad, int numChars)
 {
     // create and allocate temporary pad for generation
     int* tempPad = vmalloc(numChars);
@@ -330,32 +341,38 @@ int setPad(int** pad, int numChars)
         tempPad[i] = temp % numChars; // reduces the random key and saves it to the pad
     }
 
-    *pad = tempPad;
+    pad = tempPad;
+    vfree(tempPad);
 
     // signifies successful encryption
-    return 0;
+    return pad;
 }
 
 // encrypts supplied buffer with random keys and returns cipher by reference
-int otpEncrypt(char** buffer, int numChars)
+char* otpEncrypt(char* buffer, int numChars)
 {
     // create and set the one time pad
     int* pad = vmalloc(numChars);
-    setPad(&pad, numChars);
+    pad = setPad(pad, numChars);
+
+    char* tempBuffer = vmalloc(numChars);
 
     // shifts characters using ne time pad and alternates shift each index
     for(int i = 0; i < numChars; i++)
     {
         if(i % 2 == 0)  // if even shifts up
         {
-            *(buffer)[i] = *(buffer)[i] + pad[i];
+            tempBuffer[i] = buffer[i] + pad[i];
         }
         else    // if odd shifts down
         {
-            *(buffer)[i] = *(buffer)[i] - pad[i];
+            tempBuffer[i] = buffer[i] - pad[i];
         }
     }
 
+    tempBuffer[numChars] = '\0';
+    buffer = tempBuffer;
+
     // signifies successful encryption
-    return 0;
+    return buffer;
 }
