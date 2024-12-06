@@ -17,29 +17,18 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
+#define PATH "/dev/ReverseAlternatingCaeserian"
+#define BUFFER_SIZE 244
+
 int main(int argc, char* argv[])
 {
-    char command = argv[1][0];
-    char* userText = argv[2];
-    int textLen = strlen(userText);
-    char* keyChar = argv[3];
-    int key = atoi(keyChar);
-    
-    char* buffer = malloc(textLen);
+    int fd = open(PATH, O_RDWR);
 
-    printf("Original String: %s\n", userText);
-    
-    int fd = open("/dev/ReverseAlternatingCaeserian", O_RDWR);
-
-    write(fd, userText, textLen);
-
-    ioctl(fd, command, key);
-
-    read(fd, buffer, textLen);
-
-    printf("New String: %s\n", buffer);
-
-    free(buffer);
+    if(fd < 0)
+    {
+        printf("error is in open: %d\n", fd);
+        return 1;
+    }
 
     close(fd);
 

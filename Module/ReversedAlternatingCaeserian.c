@@ -26,6 +26,7 @@
 #define MY_MAJOR       415
 #define MY_MINOR       0
 #define DEVICE_NAME    "ReversedAlternatingCaeserian"
+#define BUFFER_SIZE    244
 
 int major, minor;
 char* kernel_buffer;
@@ -53,7 +54,7 @@ struct myCipher
 {
     int numChars;   // stores the total amount of characters input by the user
     char* buffer;   // stores text for encryption and decryption will be overwritten
-    int* key;    // used for shifting characters for both encryption and decryption
+    int key;    // used for shifting characters for both encryption and decryption
     int mode;   // used to select between encryption or decryption
 } myCipher;
 
@@ -63,14 +64,6 @@ static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, lo
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
     c->numChars = hsize;   // set number of characters
-
-    // allocates memory to store text
-    c->buffer = vmalloc(c->numChars);
-    if(c->buffer == NULL)
-    {
-        printk(KERN_ERR "Can't vmalloc the buffer.\n");
-        return -1;        
-    }
 
     // save text before terminating successfully
     if(copy_from_user(c->buffer, buf, c->numChars)) // Report error and exit forcefully if copy failed
@@ -90,30 +83,32 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
+    hsize = c->numChars;
+
     // executes user processes based off mode set in ioctl
-    switch(mode)
+    switch(c->mode)
     {
         case 0: // encrypts the users string with their key
-            encrypt(&(c->buffer), c->numChars, *(c->key));
+            c->buffer = encrypt(c->buffer, c->numChars, c->key);
             break;
         case 1: // decrypts the users string with their key
-            decrypt(&(c->buffer), c->numChars, *(c->key));
+            c->buffer = decrypt(c->buffer, c->numChars, c->key);
             break;
         case 2: // generates one time pad and encrypts users string
-            otpEncrypt(&(c->buffer), c->numChars);
+            c->buffer = otpEncrypt(c->buffer, c->numChars);
             break;
         default:
             printk(KERN_ERR "Failed in myRead.\n");
             return -1;
     }
 
-    if(copy_to_user(buf, c->buffer, c->numChars))  // save text before terminating successfully
+    if(copy_to_user(buf, c->buffer, hsize))  // save text before terminating successfully
     {
         printk(KERN_ERR "Failed to read.\n");  // Report error and exit forcefully if copy failed
         return -1;
     }
 
-    return c->numChars;
+    return hsize;
 }
 
 // initalizes cipher instance for reading and or writing
@@ -129,12 +124,15 @@ static int myOpen(struct inode* inode, struct file* fs)
 
     // sets the size of current buffer to 0 and allocates memory for key
     c->numChars = 0;
-    c->key = vmalloc(sizeof(int));
-    if(c->key == NULL)
+
+    c->buffer = vmalloc(BUFFER_SIZE);
+    if(c->buffer == NULL)
     {
-        printk(KERN_ERR "Can't vmalloc key.\n");
+        printk(KERN_ERR "Can't vmalloc buffer.\n");
         return -1;        
     }
+
+    c->key = 0;
 
     // saves our struct instance for future use
     fs->private_data = c;
@@ -148,13 +146,12 @@ static int myClose(struct inode* inode, struct file* fs)
 
     // free allocated memory
     vfree(c->buffer);
-    vfree(c->key);
     vfree(c);
 
     // clear values after freeing allocated memory
     c->numChars = 0;
     c->buffer = NULL;
-    c->key = NULL;
+    c->key = 0;
     c = NULL;
 
     return 0;
@@ -164,25 +161,29 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
+    int* tempKey = 0;
+
     // save text before terminating successfully
-    if(copy_from_user(c->key, (int __user*) data, sizeof(c->key)))
+    if(copy_from_user(tempKey, (int __user*) data, sizeof(c->key)))
     {
         // Report error and exit forcefully if copy failed
         printk(KERN_ERR "Failed to copy key.\n");
         return -1;
     }
 
+    c->key = *tempKey;
+
     // selects process based on command entered by user
     switch(command)
     {
         case 0: // sets mode for encrypting user text
-            mode = 0;
+            c->mode = 0;
             break;
         case 1: // sets mode for decrypting user text
-            mode = 1;
+            c->mode = 1;
             break;
         case 2: // sets mode for encrypting with one time pad, decryption impossible if attempted
-            mode = 2;
+            c->mode = 2;
             break;
         default:    // forcefully returns if command is invalid
             printk(KERN_ERR "Failed in myIoCtl.\n");
@@ -242,16 +243,10 @@ void cleanup_module(void)
 // im a fan of da vinci and he was known for mirror writing in reverse
 // so in an effort to add some complexity i will be doing the same here
 // reversed text will be returned through reference
-int reverse(char* buffer, int numChars)
+char* reverse(char* buffer, int numChars)
 {
     // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
     char* tempBuffer = vmalloc(numChars);
-    if(tempBuffer == NULL) 
-    {
-        // Report error and exit forcefully if copy failed
-        printk(KERN_ERR "Can't vmalloc the temporary buffer in Reverse.\n");
-        return -1;        
-    }
     
     // saves characters into our temp buffer as we iterate backwards through
     // the source buffer
@@ -265,12 +260,12 @@ int reverse(char* buffer, int numChars)
 
     // sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
-    *buffer = tempBuffer;
+    buffer = tempBuffer;
 
     // free the allocated memory before terminating
     vfree(tempBuffer);
 
-    return 0;
+    return buffer;
 }
 
 // encrypts supplied buffer with provided key and returns cipher by reference
