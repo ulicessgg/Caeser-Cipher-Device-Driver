@@ -115,7 +115,7 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
 static int myOpen(struct inode* inode, struct file* fs)
 {
     // creates cipher struct instance and allocates memory for use
-    struct myCipher* c = vmalloc(sizeof(struct myCipher));
+    struct myCipher* c = (struct myCipher*) vmalloc(sizeof(struct myCipher));
     if(c == NULL)
     {
         printk(KERN_ERR "Can't vmalloc, File not opened.\n");
@@ -125,7 +125,7 @@ static int myOpen(struct inode* inode, struct file* fs)
     // sets the size of current buffer to 0 and allocates memory for key
     c->numChars = 0;
 
-    c->buffer = vmalloc(BUFFER_SIZE);
+    c->buffer = (char*) vmalloc(BUFFER_SIZE * sizeof(char));
     if(c->buffer == NULL)
     {
         printk(KERN_ERR "Can't vmalloc buffer.\n");
@@ -246,7 +246,7 @@ void cleanup_module(void)
 char* reverse(char* buffer, int numChars)
 {
     // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
-    char* tempBuffer = vmalloc(numChars);
+    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
     
     // saves characters into our temp buffer as we iterate backwards through
     // the source buffer
@@ -271,7 +271,7 @@ char* reverse(char* buffer, int numChars)
 // encrypts supplied buffer with provided key and returns cipher by reference
 char* encrypt(char* buffer, int numChars, int key)
 {
-    char* tempBuffer = vmalloc(numChars);
+    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
 
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
@@ -297,7 +297,7 @@ char* encrypt(char* buffer, int numChars, int key)
 // decrypts supplied buffer with provided key and returns plain text by reference
 char* decrypt(char* buffer, int numChars, int key)
 {
-    char* tempBuffer = vmalloc(numChars);
+    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
 
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
@@ -325,7 +325,7 @@ char* decrypt(char* buffer, int numChars, int key)
 int* setPad(int* pad, int numChars)
 {
     // create and allocate temporary pad for generation
-    int* tempPad = vmalloc(numChars);
+    int* tempPad = (int*) vmalloc(numChars * sizeof(int));
 
     // generates random 0 to numChars and saves to the temp pad
     for(int i = 0; i < numChars; i++)
@@ -347,10 +347,10 @@ int* setPad(int* pad, int numChars)
 char* otpEncrypt(char* buffer, int numChars)
 {
     // create and set the one time pad
-    int* pad = vmalloc(numChars);
+    int* pad = (int*) vmalloc(numChars * sizeof(int));
     pad = setPad(pad, numChars);
 
-    char* tempBuffer = vmalloc(numChars);
+    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
 
     // shifts characters using ne time pad and alternates shift each index
     for(int i = 0; i < numChars; i++)

@@ -29,6 +29,11 @@ int main(int argc, char* argv[])
         printf("error is in open: %d\n", fd);
         return 1;
     }
+    if(fd == 0)
+    {
+        printf("error is not in open: %d\n", fd);
+        return 1;
+    }
 
     close(fd);
 
