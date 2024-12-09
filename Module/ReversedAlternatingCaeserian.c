@@ -83,33 +83,13 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
-    /*
-        // executes user processes based off mode set in ioctl
-        switch(c->mode)
-        {
-            case 0: // encrypts the users string with their key
-                c->buffer = encrypt(c->buffer, c->numChars, c->key);
-                break;
-            case 1: // decrypts the users string with their key
-                c->buffer = decrypt(c->buffer, c->numChars, c->key);
-                break;
-            case 2: // generates one time pad and encrypts users string
-                c->buffer = otpEncrypt(c->buffer, c->numChars);
-                break;
-            default:
-                printk(KERN_ERR "Failed in myRead.\n");
-                return -1;
-        }
-    */
-    
-
-    if(copy_to_user(buf, c->buffer, c->numChars))  // save text before terminating successfully
+    if(copy_to_user(buf, c->buffer, hsize))  // save text before terminating successfully
     {
         printk(KERN_ERR "Failed to read.\n");  // Report error and exit forcefully if copy failed
         return -1;
     }
 
-    return c->numChars;
+    return hsize;
 }
 
 // initalizes cipher instance for reading and or writing
@@ -243,7 +223,7 @@ void cleanup_module(void)
 char* reverse(char* buffer, int numChars)
 {
     // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
-    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
+    char* tempBuffer = (char*) vmalloc(numChars);
     
     // saves characters into our temp buffer as we iterate backwards through
     // the source buffer
@@ -268,7 +248,7 @@ char* reverse(char* buffer, int numChars)
 // encrypts supplied buffer with provided key and returns cipher by reference
 char* encrypt(char* buffer, int numChars, int key)
 {
-    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
+    char* tempBuffer = (char*) vmalloc(numChars);
 
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
@@ -294,7 +274,7 @@ char* encrypt(char* buffer, int numChars, int key)
 // decrypts supplied buffer with provided key and returns plain text by reference
 char* decrypt(char* buffer, int numChars, int key)
 {
-    char* tempBuffer = (char*) vmalloc(numChars * sizeof(char));
+    char* tempBuffer = (char*) vmalloc(numChars);
 
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
