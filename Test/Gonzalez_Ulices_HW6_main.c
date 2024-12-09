@@ -26,6 +26,31 @@
 
 int main(int argc, char* argv[])
 {
+    char* string = malloc(BUFFER_SIZE);
+    char command;
+    int key;
+
+    if(argc == 4)
+    {
+        // set string being encrypted/decrypted and gather its size
+        strncpy(string, argv[2], BUFFER_SIZE - 1);
+        string[BUFFER_SIZE] = '\0';
+        // set the mode for the driver encrypt-e decrypt-d one_time_pad-o
+        command = argv[1][0];
+        // set the encryption key for caeser cipher
+        key = atoi(argv[3]);
+    }
+    else
+    {
+        printf("Please enter your piece of text to encrypt/decrypt: ");
+        fgets(string, BUFFER_SIZE, stdin);
+        string[BUFFER_SIZE] = '\0';
+        printf("Please enter e for encryption, d for decryption, or o to use a one time pad: ");
+        scanf("%s", &command);
+        printf("Please enter your encryption key: ");
+        scanf("%d", &key);
+    }
+    
     // open driver and create file descriptor for driver use
     int fd = open(PATH, O_RDWR);
     if(fd < 0)  // ensure file descriptor is valid to proceed
@@ -35,7 +60,6 @@ int main(int argc, char* argv[])
     }
 
     // set string being encrypted/decrypted and gather its size
-    char* string = argv[2];
     int numChars = strlen(string);
 
     if(numChars > BUFFER_SIZE)
@@ -43,7 +67,7 @@ int main(int argc, char* argv[])
         numChars = BUFFER_SIZE;
     }
 
-    printf("Original String: %s\n", string);
+    printf("\nOriginal String: %s", string);
 
     // write string of numChars size to the driver module
     int retSize = write(fd, string, numChars);
@@ -54,13 +78,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    printf("Wrote: %d bytes\n", retSize);
-
-    // set the mode for the driver encrypt-e decrypt-d one_time_pad-o
-    char command = argv[1][0];
-
-    // set the encryption key for caeser cipher
-    int key = atoi(argv[3]);
+    printf("Wrote: %d bytes", retSize);
 
     char* out;
 
@@ -87,7 +105,10 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    printf("Key Used: %d\n", key);
+    if(command != 'o')
+    {
+        printf("\nKey Used: %d", key);
+    }
 
     // read from the driver and gather its return value
     retSize = read(fd, string, numChars);
@@ -98,8 +119,8 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    printf("Reading: %d bytes\n", retSize);
-    printf("%s String: %s\n", out, string);
+    printf("\nReading: %d bytes", retSize);
+    printf("\n%s String: %s\n", out, string);
     
     close(fd);
 

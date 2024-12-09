@@ -39,7 +39,7 @@ LASTNAME=Gonzalez
 ROOTNAME=$(LASTNAME)_$(FIRSTNAME)_HW
 HW=6
 FOPTION=_main
-RUNOPTIONS='e' "Hello World" 1
+RUNOPTIONS=
 CC=gcc
 CFLAGS= -g -I.
 LIBS =-l pthread
@@ -60,4 +60,3 @@ run: $(ROOTNAME)$(HW)$(FOPTION)
 
 vrun: $(ROOTNAME)$(HW)$(FOPTION)
 	valgrind ./$(ROOTNAME)$(HW)$(FOPTION) $(RUNOPTIONS)
-
