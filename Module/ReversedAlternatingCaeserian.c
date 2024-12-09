@@ -83,32 +83,33 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
-    hsize = c->numChars;
+    /*
+        // executes user processes based off mode set in ioctl
+        switch(c->mode)
+        {
+            case 0: // encrypts the users string with their key
+                c->buffer = encrypt(c->buffer, c->numChars, c->key);
+                break;
+            case 1: // decrypts the users string with their key
+                c->buffer = decrypt(c->buffer, c->numChars, c->key);
+                break;
+            case 2: // generates one time pad and encrypts users string
+                c->buffer = otpEncrypt(c->buffer, c->numChars);
+                break;
+            default:
+                printk(KERN_ERR "Failed in myRead.\n");
+                return -1;
+        }
+    */
+    
 
-    // executes user processes based off mode set in ioctl
-    switch(c->mode)
-    {
-        case 0: // encrypts the users string with their key
-            c->buffer = encrypt(c->buffer, c->numChars, c->key);
-            break;
-        case 1: // decrypts the users string with their key
-            c->buffer = decrypt(c->buffer, c->numChars, c->key);
-            break;
-        case 2: // generates one time pad and encrypts users string
-            c->buffer = otpEncrypt(c->buffer, c->numChars);
-            break;
-        default:
-            printk(KERN_ERR "Failed in myRead.\n");
-            return -1;
-    }
-
-    if(copy_to_user(buf, c->buffer, hsize))  // save text before terminating successfully
+    if(copy_to_user(buf, c->buffer, c->numChars))  // save text before terminating successfully
     {
         printk(KERN_ERR "Failed to read.\n");  // Report error and exit forcefully if copy failed
         return -1;
     }
 
-    return hsize;
+    return c->numChars;
 }
 
 // initalizes cipher instance for reading and or writing
@@ -161,28 +162,24 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
-    int* tempKey = 0;
-
     // save text before terminating successfully
-    if(copy_from_user(tempKey, (int __user*) data, sizeof(c->key)))
+    if(copy_from_user(&(c->key), (int __user*) data, sizeof(c->key)))
     {
         // Report error and exit forcefully if copy failed
         printk(KERN_ERR "Failed to copy key.\n");
-        return -1;
+        return -EFAULT;
     }
-
-    c->key = *tempKey;
 
     // selects process based on command entered by user
     switch(command)
     {
-        case 0: // sets mode for encrypting user text
+        case 'e': // sets mode for encrypting user text
             c->mode = 0;
             break;
-        case 1: // sets mode for decrypting user text
+        case 'd': // sets mode for decrypting user text
             c->mode = 1;
             break;
-        case 2: // sets mode for encrypting with one time pad, decryption impossible if attempted
+        case 'o': // sets mode for encrypting with one time pad, decryption impossible if attempted
             c->mode = 2;
             break;
         default:    // forcefully returns if command is invalid
