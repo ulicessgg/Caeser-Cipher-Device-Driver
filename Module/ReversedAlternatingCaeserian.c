@@ -83,6 +83,16 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
 {
     struct myCipher* c = (struct myCipher*) fs->private_data;
 
+    c->buffer = encrypt(c->buffer, c->numChars, c->key);
+    c->buffer = decrypt(c->buffer, c->numChars, c->key);
+    c->buffer = otpEncrypt(c->buffer, c->numChars);
+    
+    if(c->buffer == NULL)
+    {
+        printk(KERN_ERR "Failled to reverse string returned NULL");
+        return -1;
+    }
+
     if(copy_to_user(buf, c->buffer, hsize))  // save text before terminating successfully
     {
         printk(KERN_ERR "Failed to read.\n");  // Report error and exit forcefully if copy failed
@@ -215,29 +225,29 @@ void cleanup_module(void)
     printk(KERN_INFO "Goodbyte from the Mirrored Caeserian Driver!\n");
 }
 
-//////////////////////////////////////////////////////////////////////////////
-
 // im a fan of da vinci and he was known for mirror writing in reverse
 // so in an effort to add some complexity i will be doing the same here
 // reversed text will be returned through reference
 char* reverse(char* buffer, int numChars)
 {
     // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
-    char* tempBuffer = (char*) vmalloc(numChars);
+    char* tempBuffer = vmalloc(numChars);
+    if(tempBuffer == NULL)
+    {
+        printk(KERN_ERR "Failed to allocate temp buffer in reverse");
+        return NULL;
+    }
     
     // saves characters into our temp buffer as we iterate backwards through
     // the source buffer
     for(int i = 0; i < numChars; i++)
     {
-        for(int j = numChars - 1; j >= 0; j--)
-        {
-            tempBuffer[i] = buffer[j];
-        }
+        tempBuffer[i] = buffer[numChars - i - 1];
     }
 
     // sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
-    buffer = tempBuffer;
+    strncpy(buffer, tempBuffer, numChars);
 
     // free the allocated memory before terminating
     vfree(tempBuffer);
@@ -248,7 +258,15 @@ char* reverse(char* buffer, int numChars)
 // encrypts supplied buffer with provided key and returns cipher by reference
 char* encrypt(char* buffer, int numChars, int key)
 {
-    char* tempBuffer = (char*) vmalloc(numChars);
+    char* tempBuffer = vmalloc(numChars);
+    if(tempBuffer == NULL)
+    {
+        printk(KERN_ERR "Failed to allocate temp buffer in encrypt");
+        return NULL;
+    }
+
+    // reverse string prior shifting characters for proper cipher
+    buffer = reverse(buffer, numChars);
 
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
@@ -263,8 +281,11 @@ char* encrypt(char* buffer, int numChars, int key)
         }
     }
 
+    // sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
-    buffer = tempBuffer;
+    strncpy(buffer, tempBuffer, numChars);
+    
+    // free the allocated memory before terminating
     vfree(tempBuffer);
 
     // signifies successful encryption
@@ -274,7 +295,12 @@ char* encrypt(char* buffer, int numChars, int key)
 // decrypts supplied buffer with provided key and returns plain text by reference
 char* decrypt(char* buffer, int numChars, int key)
 {
-    char* tempBuffer = (char*) vmalloc(numChars);
+    char* tempBuffer = vmalloc(numChars);
+    if(tempBuffer == NULL)
+    {
+        printk(KERN_ERR "Failed to allocate temp buffer in decrypt");
+        return NULL;
+    }
 
     // shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
@@ -289,11 +315,17 @@ char* decrypt(char* buffer, int numChars, int key)
         }
     }
 
+    // sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
-    buffer = tempBuffer;
+    strncpy(buffer, tempBuffer, numChars);
+    
+    // free the allocated memory before terminating
     vfree(tempBuffer);
 
-    // signifies successful encryption
+    // reverse string after shifting characters for proper plain text
+    buffer = reverse(buffer, numChars);
+
+    // signifies successful decryption
     return buffer;
 }
 

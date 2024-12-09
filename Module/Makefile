@@ -11,7 +11,8 @@ obj-m += $(BASENAME).o
 
 all:
 	make -C $(KERNELDIR) M=$(PWD) modules
+	./installIt.sh
 
 clean:
 	make -C $(KERNELDIR) M=$(PWD) clean
-
+	./removeIt.sh
