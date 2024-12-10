@@ -7,8 +7,9 @@
 *
 * File:: <AlternatingCaeserian.c>
 *
-* Description:: Device Driver that mirrors a string and uses
-* a Caeserian Cipher to Encrypt/Decrypt the string
+* Description:: Device Driver that uses an Alternating Caeser 
+* Cipher to Encrypt/Decrypt user string with given key
+* Can also generate one time pad and encrypt it in reverse
 *
 **************************************************************/
 
@@ -17,10 +18,7 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/vmalloc.h>
-
 #include <linux/sched.h>
-
-// used for random key generation
 #include <linux/random.h>
 
 #define MY_MAJOR       415
@@ -38,70 +36,98 @@ MODULE_AUTHOR("Ulices Gonzalez");
 MODULE_DESCRIPTION("A simple encryption program");
 MODULE_LICENSE("GPL");
 
-// general encryption and decryption functions used for driver 
+//  general encryption and decryption functions used for driver 
 char* encrypt(char*, int, int);
 char* decrypt(char*, int, int);
 
-// functions used when one time pad is selected
+//  functions used when one time pad is selected
 char* reverse(char*, int);
 int randKey(int);
 char* otpEncrypt(char*, int);
 
-// data structure used for storing info essesntial to
+//  data structure used for storing info essesntial to
 struct myCipher
 {
-    int numChars;   // stores the total amount of characters input by the user
-    char* buffer;   // stores text for encryption and decryption will be overwritten
-    int key;    // used for shifting characters for both encryption and decryption
-    int mode;   // used to select between encryption or decryption
+    int numChars;   //  stores the total amount of characters input by the user
+    int key;    //  used for shifting characters for both encryption and decryption
+    int mode;   //  used to select between encryption or decryption
+    char* buffer;   //  stores text for encryption and decryption will be overwritten
 } myCipher;
 
-// writes text from user and allocates memory to support n amount of characters
+//  writes text from user
 static ssize_t myWrite(struct file* fs, const char __user* buf, size_t hsize, loff_t* off)
 {
+    //  load struct before writing
     struct myCipher* c = (struct myCipher*) fs->private_data;
+    if(c == NULL)   //  report error and exit if loading failed
+    {
+        printk(KERN_ERR "Failed to load private data!");
+        return -1;
+    }
 
-    c->numChars = hsize;   // set number of characters
+    c->numChars = hsize;   //   set number of characters
 
-    // save text before terminating successfully
-    if(copy_from_user(c->buffer, buf, c->numChars)) // Report error and exit forcefully if copy failed
+    //  save text before terminating successfully, report error and exit if copy failed
+    if(copy_from_user(c->buffer, buf, c->numChars)) 
     {
         printk(KERN_ERR "Failed to write.\n");
         return -1;
     }
 
-    c->buffer[c->numChars] = '\0';  // sets the null terminator for future use
+    c->buffer[c->numChars] = '\0';  //    sets the null terminator for future use
 
     printk(KERN_INFO "We wrote: %lu characters", hsize);
 
     return hsize;
 }
 
+//  reads text to user
 static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* off)
 {
+    //  load struct before reading
     struct myCipher* c = (struct myCipher*) fs->private_data;
+    if(c == NULL)   //  report error and exit if loading failed
+    {
+        printk(KERN_ERR "Failed to load private data!");
+        return -1;
+    }
 
+    //  using mode set by user command call respective function before copying to user
     switch(c->mode)
     {
         case 0:
             c->buffer = encrypt(c->buffer, c->numChars, c->key);
-            c->mode = 1;
+            if(c->buffer == NULL)   // report error and exit
+            {
+                printk(KERN_ERR "Failed to encrypt buffer");
+                return -1;
+            }
             break;
         case 1:
             c->buffer = decrypt(c->buffer, c->numChars, c->key);
-            c->mode = 0;
+            if(c->buffer == NULL)   // report error and exit
+            {
+                printk(KERN_ERR "Failed to encrypt buffer");
+                return -1;
+            }
             break;
         case 2:
             c->buffer = otpEncrypt(c->buffer, c->numChars);
+            if(c->buffer == NULL)   // report error and exit
+            {
+                printk(KERN_ERR "Failed to encrypt buffer");
+                return -1;
+            }
             break;
         default:
-            printk(KERN_ERR "Failed to execute user requests.\n");  
+            printk(KERN_ERR "Failed to execute user command.\n");  
             return -1;
     }
 
-    if(copy_to_user(buf, c->buffer, hsize))  // save text before terminating successfully
+    //  save text before terminating successfully, report error and exit if copy failed
+    if(copy_to_user(buf, c->buffer, hsize)) 
     {
-        printk(KERN_ERR "Failed to read.\n");  // Report error and exit forcefully if copy failed
+        printk(KERN_ERR "Failed to read.\n"); 
         return -1;
     }
 
@@ -110,65 +136,78 @@ static ssize_t myRead(struct file* fs, char __user* buf, size_t hsize, loff_t* o
     return hsize;
 }
 
-// initalizes cipher instance for reading and or writing
+//  initalizes cipher instance for reading and or writing
 static int myOpen(struct inode* inode, struct file* fs)
 {
-    // creates cipher struct instance and allocates memory for use
+    //  create cipher struct instance and allocate memory for use
     struct myCipher* c = (struct myCipher*) vmalloc(sizeof(struct myCipher));
-    if(c == NULL)
+    if(c == NULL)   // check if instance is allocated and report and exit if not
     {
         printk(KERN_ERR "Can't vmalloc, File not opened.\n");
         return -1;        
     }
 
-    // sets the size of current buffer to 0 and allocates memory for key
+    //  set the size of current buffer, mode, and key to 0 and allocate buffer
     c->numChars = 0;
-
-    c->buffer = (char*) vmalloc(BUFFER_SIZE * sizeof(char));
-    if(c->buffer == NULL)
+    c->mode = 0;
+    c->key = 0;
+    c->buffer = (char*) vmalloc(BUFFER_SIZE);
+    if(c->buffer == NULL)   //  check if buffer is allocated, report and exit if not
     {
         printk(KERN_ERR "Can't vmalloc buffer.\n");
         return -1;        
     }
 
-    c->key = 0;
-
-    // saves our struct instance for future use
+    //  saves our struct instance for future use
     fs->private_data = c;
 
     return 0;
 }
 
+//  releases struct instance and before closing driver
 static int myClose(struct inode* inode, struct file* fs)
 {
+    //  load struct before closing
     struct myCipher* c = (struct myCipher*) fs->private_data;
+    if(c == NULL)   //  report error and exit if loading failed
+    {
+        printk(KERN_ERR "Failed to load private data!");
+        return -1;
+    }
 
-    // free allocated memory
+    //  free allocated memory
     vfree(c->buffer);
     vfree(c);
 
-    // clear values after freeing allocated memory
+    //  clear values after freeing allocated memory
     c->numChars = 0;
-    c->buffer = NULL;
     c->key = 0;
+    c->mode = 0;
+    c->buffer = NULL;
     c = NULL;
 
     return 0;
 }
 
+//  sets user requested process and cipher key
 static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
 {
+    //  load struct before setting key and commmand
     struct myCipher* c = (struct myCipher*) fs->private_data;
+    if(c == NULL)   //  report error and exit if loading failed
+    {
+        printk(KERN_ERR "Failed to load private data!");
+        return -1;
+    }
 
-    // save text before terminating successfully
+    //  save key before setting command, report error and exit if copy failed
     if(copy_from_user(&(c->key), (int __user*) data, sizeof(c->key)))
     {
-        // Report error and exit forcefully if copy failed
         printk(KERN_ERR "Failed to copy key.\n");
         return -EFAULT;
     }
 
-    // selects process based on command entered by user
+    //  selects process based on command entered by user
     switch(command)
     {
         case 'e': // sets mode for encrypting user text
@@ -185,12 +224,13 @@ static long myIoCtl(struct file* fs, unsigned int command, unsigned long data)
             return -1;
     }
 
+    //  saves our struct instance
     fs-> private_data = c;
 
     return 0;
 }
 
-// data struct for using driver -- may need to be edited as cipher is fully implemented
+//  data struct for using driver 
 struct file_operations fops = 
 {
     .open = myOpen,
@@ -201,7 +241,7 @@ struct file_operations fops =
     .owner = THIS_MODULE,
 };
 
-// creates device node in /dev, returns error if not made
+//  creates device node in /dev, returns error if not made
 int init_module(void)
 {
     int result, registers;
@@ -224,7 +264,7 @@ int init_module(void)
     return result;
 }
 
-// unregistering and removing device from kernel
+//  unregistering and removing device from kernel
 void cleanup_module(void)
 {
     dev_t devno = MKDEV(MY_MAJOR, MY_MINOR);
@@ -233,20 +273,21 @@ void cleanup_module(void)
     printk(KERN_INFO "Goodbyte from The Alternating Caeserian Driver!\n");
 }
 
-// encrypts supplied buffer with provided key and returns cipher
+//  encrypts supplied buffer with provided key and returns cipher
 char* encrypt(char* buffer, int numChars, int key)
 {
+    //  create temp buffer and allocate it
     char* tempBuffer = vmalloc(numChars);
-    if(tempBuffer == NULL)
+    if(tempBuffer == NULL)  //  report and exit if allocation failed
     {
         printk(KERN_ERR "Failed to allocate temp buffer in encrypt");
         return NULL;
     }
 
-    // shifts characters using key and alternates shift each index
+    //  shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
     {
-        if(buffer[i] == ' ')    // if space set it and skip
+        if(buffer[i] == ' ')    //  if space set it and skip
         {
             tempBuffer[i] = ' ';
         }
@@ -254,37 +295,38 @@ char* encrypt(char* buffer, int numChars, int key)
         {
             tempBuffer[i] = buffer[i] + key;
         }
-        else if(i % 2 != 0)    // if odd shifts down
+        else if(i % 2 != 0)    //   if odd shifts down
         {
             tempBuffer[i] = buffer[i] - key;
         }
     }
 
-    // sets the null terminator and copies back to our buffer once done
+    //  sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
     strncpy(buffer, tempBuffer, numChars);
     
-    // free the allocated memory before terminating
+    //  free the allocated memory before terminating
     vfree(tempBuffer);
 
-    // signifies successful encryption
+    //  signifies successful encryption
     return buffer;
 }
 
 // decrypts supplied buffer with provided key and returns plain text
 char* decrypt(char* buffer, int numChars, int key)
 {
+    //  create temp buffer and allocate it
     char* tempBuffer = vmalloc(numChars);
-    if(tempBuffer == NULL)
+    if(tempBuffer == NULL)  //  report and exit if allocation failed
     {
         printk(KERN_ERR "Failed to allocate temp buffer in decrypt");
         return NULL;
     }
 
-    // shifts characters using key and alternates shift each index
+    //  shifts characters using key and alternates shift each index
     for(int i = 0; i < numChars; i++)
     {
-        if(buffer[i] == ' ')    // if space set it and skip
+        if(buffer[i] == ' ')    //  if space set it and skip
         {
             tempBuffer[i] = ' ';
         }
@@ -292,81 +334,93 @@ char* decrypt(char* buffer, int numChars, int key)
         {
             tempBuffer[i] = buffer[i] - key;
         }
-        else if(i % 2 != 0)    // if odd shifts back up
+        else if(i % 2 != 0)    //   if odd shifts back up
         {
             tempBuffer[i] = buffer[i] + key;
         }
     }
 
-    // sets the null terminator and copies back to our buffer once done
+    //  sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
     strncpy(buffer, tempBuffer, numChars);
     
-    // free the allocated memory before terminating
+    //  free the allocated memory before terminating
     vfree(tempBuffer);
 
-    // signifies successful decryption
+    //  signifies successful decryption
     return buffer;
 }
 
-// im a fan of da vinci and he was known for mirror writing in reverse
-// so in an effort to add some complexity i will be doing the same here
-// reversed text will be returned
+//  im a fan of da vinci and he was known for mirror writing
+//  so in an effort to add some complexity i will be doing the 
+//  same here by reversing text in one time pad caeser cipher
 char* reverse(char* buffer, int numChars)
 {
-    // create temp buffer and allocates memory to hold reversed values, prevents buffering issues
+    //  create temp buffer and allocate it
     char* tempBuffer = vmalloc(numChars);
-    if(tempBuffer == NULL)
+    if(tempBuffer == NULL)  //  report and exit if allocation failed
     {
         printk(KERN_ERR "Failed to allocate temp buffer in reverse");
         return NULL;
     }
     
-    // saves characters into our temp buffer as we iterate backwards through
-    // the source buffer
+    //  iterates backwards and save to tempBuffer to reverse text
     for(int i = 0; i < numChars; i++)
     {
         tempBuffer[i] = buffer[numChars - i - 1];
     }
 
-    // sets the null terminator and copies back to our buffer once done
+    //  sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
     strncpy(buffer, tempBuffer, numChars);
 
-    // free the allocated memory before terminating
+    //  free the allocated memory before terminating
     vfree(tempBuffer);
 
     return buffer;
 }
 
-// sets one time pad using random keys for encryption and decryption
+//  sets one time pad using random keys for encryption and decryption
 int randKey(int numChars)
 {
-    // create a tempKey for random values
+    //  create a tempKey for random values
     unsigned int tempKey = 0;
 
+    //  generate random values and save to tempKey
     get_random_bytes(&tempKey, sizeof(unsigned int));
-    tempKey = (tempKey % numChars) + 1; // reduces the random key and saves it to the pad
+    tempKey = (tempKey % numChars) + 1; // reduce the random number and save it
 
     // signifies successful generation
     return tempKey;
 }
 
-// encrypts supplied buffer with random keys and returns cipher
+//  encrypts supplied buffer with random keys and returns cipher
 char* otpEncrypt(char* buffer, int numChars)
 {
-    // create and set the one time pad
+    //  create and set the one time pad
     int key = 0;
 
+    //  create temp buffer and allocate it
     char* tempBuffer = vmalloc(numChars);
+    if(tempBuffer == NULL)  //  report and exit if allocation failed
+    {
+        printk(KERN_ERR "Failed to allocate temp buffer in reverse");
+        return NULL;
+    }
 
+    //  reverse user buffer before encrypting
     buffer = reverse(buffer, numChars);
+    if(buffer == NULL)   //  report error and exit
+    {
+        printk(KERN_ERR "Failed to reverse buffer");
+        return NULL;
+    }
 
-    // shifts characters using ne time pad and alternates shift each index
+    //  shifts characters using one time pad and alternates shift each index
     for(int i = 0; i < numChars; i++)
     {
         key = randKey(numChars);
-        if(buffer[i] == ' ')    // if space set it and skip
+        if(buffer[i] == ' ')    //  if space set it and skip
         {
             tempBuffer[i] = ' ';
         }
@@ -374,15 +428,18 @@ char* otpEncrypt(char* buffer, int numChars)
         {
             tempBuffer[i] = buffer[i] + key;
         }
-        else if(i % 2 != 0)    // if odd shifts down
+        else if(i % 2 != 0)    //   if odd shifts down
         {
             tempBuffer[i] = buffer[i] - key;
         }
     }
 
+    //  sets the null terminator and copies back to our buffer once done
     tempBuffer[numChars] = '\0';
     strncpy(buffer, tempBuffer, numChars);
 
-    // signifies successful encryption
+    //  free the allocated memory before terminating
+    vfree(tempBuffer);
+
     return buffer;
 }
