@@ -1,2 +1,2 @@
-sudo rm /dev/ReversedAlternatingCaeserian
-sudo rmmod ReversedAlternatingCaeserian.ko
+sudo rm /dev/AlternatingCaeserian
+sudo rmmod AlternatingCaeserian.ko

@@ -5,7 +5,7 @@
 * GitHub-Name:: ulicessgg
 * Project:: Assignment 6 – Device Driver
 *
-* File:: <ReversedAlternatingCaeserian.c>
+* File:: <AlternatingCaeserian.c>
 *
 * Description:: Device Driver that mirrors a string and uses
 * a Caeserian Cipher to Encrypt/Decrypt the string
@@ -25,7 +25,7 @@
 
 #define MY_MAJOR       415
 #define MY_MINOR       0
-#define DEVICE_NAME    "ReversedAlternatingCaeserian"
+#define DEVICE_NAME    "AlternatingCaeserian"
 #define BUFFER_SIZE    244
 
 int major, minor;
@@ -214,7 +214,7 @@ int init_module(void)
 
     result = cdev_add(&my_cdev, devno, 1);
     printk(KERN_INFO "Dev Add chardev succeeed 2: %d\n", result);
-    printk(KERN_INFO "Welcome - Reversed Alternating Caeserian Driver is loaded.\n");
+    printk(KERN_INFO "Welcome - The Alternating Caeserian Driver is loaded.\n");
 
     if(result < 0)
     {
@@ -230,7 +230,7 @@ void cleanup_module(void)
     dev_t devno = MKDEV(MY_MAJOR, MY_MINOR);
     unregister_chrdev_region(devno, 1);
     cdev_del(&my_cdev);
-    printk(KERN_INFO "Goodbyte from the Reversed Alternating Caeserian Driver!\n");
+    printk(KERN_INFO "Goodbyte from The Alternating Caeserian Driver!\n");
 }
 
 // encrypts supplied buffer with provided key and returns cipher

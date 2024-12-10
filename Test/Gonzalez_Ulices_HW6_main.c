@@ -16,9 +16,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <errno.h>
 
-#define PATH "/dev/ReversedAlternatingCaeserian"
+#define PATH "/dev/AlternatingCaeserian"
 #define ENCR "Encrypted"
 #define DECR "Decrypted"
 #define OTPS "One Time Pad Encrypted"
@@ -26,29 +25,38 @@
 
 int main(int argc, char* argv[])
 {
+    //  create variables for driver use
     char* string = malloc(BUFFER_SIZE);
     char command;
     int key;
 
-    if(argc == 4)
+    if(argc == 4)   //  handles the use of RUNOPTIONS for inputting a string, command, and key
     {
-        // set string being encrypted/decrypted and gather its size
-        strncpy(string, argv[2], BUFFER_SIZE - 1);
-        string[BUFFER_SIZE] = '\0';
-        // set the mode for the driver encrypt-e decrypt-d one_time_pad-o
+        //  copy the users input directly into our variables to pass to the driver
+        strncpy(string, argv[2], BUFFER_SIZE);
         command = argv[1][0];
-        // set the encryption key for caeser cipher
         key = atoi(argv[3]);
     }
-    else
+    else    //  handles the lack of RUNOPTIONS and promtps for user input string, command, and key
     {
-        printf("Please enter your piece of text to encrypt/decrypt: ");
+        //  user is prompted for text and driver command
+        printf("Enter Text for Encryption/Decryption: ");
         fgets(string, BUFFER_SIZE, stdin);
-        string[BUFFER_SIZE] = '\0';
-        printf("Please enter e for encryption, d for decryption, or o to use a one time pad: ");
+
+        printf("Enter e - for Encryption | d - for Decryption | o - for One Time Pad: ");
         scanf("%s", &command);
-        printf("Please enter your encryption key: ");
-        scanf("%d", &key);
+
+        //  used to avoid needless output to the terminal
+        if(command != 'o')
+        {
+            //  user is prompted for key if one time pad is not selected
+            printf("Enter Encryption/Decryption key: ");
+            scanf("%d", &key);
+        }
+        else
+        {
+            key = 0;    // key is set to 0 as it wont be used for one time pad
+        }
     }
     
     // open driver and create file descriptor for driver use
@@ -59,9 +67,8 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    // set string being encrypted/decrypted and gather its size
+    // set string being encrypted/decrypted and limit its size before writing
     int numChars = strlen(string);
-
     if(numChars > BUFFER_SIZE)
     {
         numChars = BUFFER_SIZE;
@@ -69,9 +76,8 @@ int main(int argc, char* argv[])
 
     printf("\nOriginal String: %s", string);
 
-    // write string of numChars size to the driver module
+    // writes string to the driver module and checks for success beofre moving onto ioctl
     int retSize = write(fd, string, numChars);
-    // if the returned size is not the same as what was passed then exit
     if(retSize != numChars)
     {
         printf("Failed to write to driver!");
@@ -80,39 +86,38 @@ int main(int argc, char* argv[])
 
     printf("Wrote: %d bytes", retSize);
 
-    char* out;
-
-    switch(command)
+    char* outDesc;  //  outputs respective description of returned string from read
+    switch(command) //  output description is to provide users accurate info
     {
         case 'e': 
-            out = ENCR;
+            outDesc = ENCR;
             break;
         case 'd': 
-            out = DECR;
+            outDesc = DECR;
             break;
         case 'o': 
-            out = OTPS;
+            outDesc = OTPS;
             break;
         default:
             printf("Invalid Mode.\n");
             return -1;
     }
 
-    // ensure that ioctl is succesful before moving onto read
+    // call ioctl and check for success before moving onto read
     if(ioctl(fd, command, &key) < 0)
     {
         printf("Failed to set command to driver!");
         return -1;
     }
 
+    // will output the users key if alternating caeser cipher is used
     if(command != 'o')
     {
         printf("\nKey Used: %d", key);
     }
 
-    // read from the driver and gather its return value
+    // read from the driver and check for success before terminating
     retSize = read(fd, string, numChars);
-    // if the returned size is not the same as what was passed then exit
     if(retSize != numChars)
     {
         printf("Failed to read from driver!");
@@ -120,7 +125,7 @@ int main(int argc, char* argv[])
     }
 
     printf("\nReading: %d bytes", retSize);
-    printf("\n%s String: %s\n", out, string);
+    printf("\n%s String: %s\n", outDesc, string);
     
     close(fd);
 
