@@ -7,7 +7,10 @@
 *
 * File:: <Gonzalez_Ulices_HW6_main.c>
 *
-* Description:: 
+* Description:: Simple program that makes use of Alternating
+* Caeserian Driver built in Kernel Module, allows users the
+* ability to write string for encryption/decryption and set
+* command and key for their intended process.
 *
 **************************************************************/
 #include <stdio.h>
